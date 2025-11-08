@@ -1,0 +1,206 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage{amsmath}  % 核心公式环境
+\usepackage{amssymb}  % 特殊数学符号
+\usepackage{geometry} % 页面布局
+\geometry{left=2cm, right=2cm, top=2cm, bottom=2.5cm} % 页边距
+
+% 定义符号命令，统一格式
+\newcommand{\Wone}{\mathbf{W}^{(1)}}    % 输入层→隐藏层权重矩阵
+\newcommand{\Wtwo}{\mathbf{W}^{(2)}}    % 隐藏层→输出层权重矩阵
+\newcommand{\bone}{\mathbf{b}^{(1)}}    % 输入层→隐藏层偏置向量
+\newcommand{\btwo}{\mathbf{b}^{(2)}}    % 隐藏层→输出层偏置向量
+\newcommand{\zone}{\mathbf{z}^{(1)}}    % 隐藏层加权输入
+\newcommand{\ztwo}{\mathbf{z}^{(2)}}    % 输出层加权输入
+\newcommand{\aone}{\mathbf{a}^{(1)}}    % 隐藏层激活输出
+\newcommand{\yhat}{\hat{\mathbf{y}}}    % 网络预测输出
+\newcommand{\ytrue}{\mathbf{y}}         % 真实标签
+\newcommand{\Xinput}{\mathbf{X}}        % 输入向量/矩阵
+\newcommand{\Loss}{L}                   % 损失函数
+\newcommand{\lr}{\eta}                  % 学习率
+\newcommand{\sigmoid}{\sigma}           % 激活函数（Sigmoid）
+
+
+\begin{document}
+
+\section{反向传播（Backpropagation, BP）算法核心原理与公式推导}
+
+\subsection{1. 反向传播算法的核心目的}
+反向传播算法的核心目标是：**计算损失函数\(\Loss\)相对于神经网络中所有权重\(\mathbf{W}\)和偏置\(\mathbf{b}\)的梯度\(\nabla_{\mathbf{W}}\Loss\)、\(\nabla_{\mathbf{b}}\Loss\)**，进而通过优化算法（如梯度下降）更新参数，最终最小化损失函数\(\Loss\)，使网络预测输出\(\yhat\)与真实标签\(\ytrue\)的差距逐步缩小。
+
+
+\subsection{2. 基础符号定义}
+为简化推导，采用“输入层-隐藏层-输出层”的三层神经网络结构，符号定义如下表所示：
+
+\begin{center}
+\begin{tabular}{|c|c|}
+\hline
+符号 & 含义 \\
+\hline
+\(\Xinput \in \mathbb{R}^{n \times d}\) & 输入数据矩阵（\(n\)个样本，每个样本\(d\)维） \\
+\(\Wone \in \mathbb{R}^{d \times h}\) & 输入层→隐藏层权重矩阵（\(h\)为隐藏层神经元数） \\
+\(\bone \in \mathbb{R}^{1 \times h}\) & 输入层→隐藏层偏置向量 \\
+\(\zone \in \mathbb{R}^{n \times h}\) & 隐藏层加权输入（\(\zone = \Xinput\Wone + \bone\)） \\
+\(\aone \in \mathbb{R}^{n \times h}\) & 隐藏层激活输出（\(\aone = \sigmoid(\zone)\)） \\
+\(\Wtwo \in \mathbb{R}^{h \times c}\) & 隐藏层→输出层权重矩阵（\(c\)为输出类别数） \\
+\(\btwo \in \mathbb{R}^{1 \times c}\) & 隐藏层→输出层偏置向量 \\
+\(\ztwo \in \mathbb{R}^{n \times c}\) & 输出层加权输入（\(\ztwo = \aone\Wtwo + \btwo\)） \\
+\(\yhat \in \mathbb{R}^{n \times c}\) & 网络预测输出（\(\yhat = f(\ztwo)\)，\(f\)为输出激活函数） \\
+\(\ytrue \in \mathbb{R}^{n \times c}\) & 真实标签矩阵 \\
+\(\Loss\) & 损失函数（衡量\(\yhat\)与\(\ytrue\)的误差） \\
+\hline
+\end{tabular}
+\end{center}
+
+
+\subsection{3. 前向传播：从输入到预测输出}
+前向传播是“计算预测输出\(\yhat\)”的正向过程，为后续损失计算和反向梯度推导提供基础，具体步骤如下：
+
+\subsubsection{3.1 隐藏层加权输入与激活输出}
+根据线性变换规则，隐藏层的加权输入\(\zone\)为输入\(\Xinput\)与权重\(\Wone\)的矩阵乘积，叠加偏置\(\bone\)：
+\[
+\zone = \Xinput \cdot \Wone + \bone
+\]
+为引入非线性表达能力，对\(\zone\)应用激活函数（此处以Sigmoid为例，即\(\sigmoid(x) = \frac{1}{1+e^{-x}}\)），得到隐藏层激活输出\(\aone\)：
+\[
+\aone = \sigmoid(\zone) = \frac{1}{1 + e^{-\zone}}
+\]
+
+\subsubsection{3.2 输出层加权输入与预测输出}
+同理，输出层的加权输入\(\ztwo\)为隐藏层激活输出\(\aone\)与权重\(\Wtwo\)的矩阵乘积，叠加偏置\(\btwo\)：
+\[
+\ztwo = \aone \cdot \Wtwo + \btwo
+\]
+根据任务类型选择输出激活函数\(f\)（分类任务用Softmax，回归任务用恒等函数），此处以Sigmoid（二分类任务）为例，得到最终预测输出\(\yhat\)：
+\[
+\yhat = f(\ztwo) = \sigmoid(\ztwo)
+\]
+
+
+\subsection{4. 损失计算：衡量预测误差}
+损失函数\(\Loss\)是量化“预测输出\(\yhat\)与真实标签\(\ytrue\)差距”的指标，常用两种形式：
+
+\subsubsection{4.1 均方误差（MSE，适用于回归任务）}
+对于单个样本，均方误差定义为预测值与真实值差值的平方的一半（便于后续求导简化）：
+\[
+\Loss_{\text{MSE}} = \frac{1}{2} \|\yhat - \ytrue\|^2 = \frac{1}{2} \sum_{k=1}^c (\yhat_k - \ytrue_k)^2
+\]
+其中\(\yhat_k\)、\(\ytrue_k\)分别为预测输出和真实标签的第\(k\)个分量，\(c\)为输出维度。
+
+\subsubsection{4.2 交叉熵损失（适用于分类任务）}
+对于二分类任务（输出激活函数为Sigmoid），交叉熵损失定义为：
+\[
+\Loss_{\text{CE}} = -\frac{1}{n} \sum_{i=1}^n \left[ \ytrue_i \cdot \ln\yhat_i + (1-\ytrue_i) \cdot \ln(1-\yhat_i) \right]
+\]
+其中\(n\)为样本数，\(\yhat_i\)、\(\ytrue_i\)分别为第\(i\)个样本的预测值和真实值（\(\ytrue_i \in \{0,1\}\)）。
+
+
+\subsection{5. 反向传播：梯度计算的核心（链式法则应用）}
+反向传播的核心是**利用链式法则，从输出层反向推导损失函数对各层权重\(\Wone,\Wtwo\)和偏置\(\bone,\btwo\)的梯度**，梯度的物理意义是“参数微小变化对损失的影响程度”，为参数更新提供方向。
+
+\subsubsection{5.1 关键概念：误差信号\(\delta\)}
+定义“误差信号”\(\delta\)为“损失函数对某层加权输入的梯度”，即\(\delta^{(l)} = \frac{\partial \Loss}{\partial \z^{(l)}}\)（\(l\)为层索引，\(l=1\)为隐藏层，\(l=2\)为输出层）。误差信号是梯度推导的核心桥梁——通过\(\delta^{(l)}\)可快速计算损失对权重和偏置的梯度。
+
+
+\subsubsection{5.2 输出层梯度推导（以\(\Wtwo\)和\(\btwo\)为例）}
+输出层距离损失函数最近，梯度推导最直接，步骤如下：
+
+\paragraph{步骤1：计算输出层误差信号\(\delta^{(2)}\)}
+根据链式法则，输出层误差信号\(\delta^{(2)} = \frac{\partial \Loss}{\partial \ztwo}\)可分解为“损失对预测输出的梯度”与“预测输出对加权输入的梯度”的乘积：
+\[
+\delta^{(2)} = \frac{\partial \Loss}{\partial \ztwo} = \frac{\partial \Loss}{\partial \yhat} \cdot \frac{\partial \yhat}{\partial \ztwo}
+\]
+- 若采用**均方误差（MSE）**，对\(\yhat\)求偏导：\(\frac{\partial \Loss_{\text{MSE}}}{\partial \yhat} = \yhat - \ytrue\)；
+- 若采用**交叉熵损失（CE）**（二分类+Sigmoid），对\(\yhat\)求偏导：\(\frac{\partial \Loss_{\text{CE}}}{\partial \yhat} = \frac{\yhat - \ytrue}{\yhat(1-\yhat)}\)；
+- 输出激活函数为Sigmoid时，其对\(\ztwo\)的导数为：\(\frac{\partial \yhat}{\partial \ztwo} = \yhat \cdot (1 - \yhat)\)（Sigmoid导数性质：\(\sigmoid'(x) = \sigmoid(x)(1-\sigmoid(x))\)）。
+
+将两者代入，可简化\(\delta^{(2)}\)（以交叉熵为例，MSE同理）：
+\[
+\delta^{(2)} = \frac{\yhat - \ytrue}{\yhat(1-\yhat)} \cdot \yhat(1-\yhat) = \yhat - \ytrue
+\]
+
+\paragraph{步骤2：计算损失对输出层权重\(\Wtwo\)的梯度}
+根据链式法则，\(\frac{\partial \Loss}{\partial \Wtwo} = \frac{\partial \Loss}{\partial \ztwo} \cdot \frac{\partial \ztwo}{\partial \Wtwo}\)。  
+由\(\ztwo = \aone \cdot \Wtwo + \btwo\)，对\(\Wtwo\)求偏导（矩阵求导规则：\(\frac{\partial \mathbf{A}\mathbf{W}}{\partial \mathbf{W}} = \mathbf{A}^T\)）：
+\[
+\frac{\partial \ztwo}{\partial \Wtwo} = \aone^T
+\]
+因此，损失对\(\Wtwo\)的梯度为：
+\[
+\frac{\partial \Loss}{\partial \Wtwo} = \delta^{(2)} \cdot \aone^T
+\]
+（注：若为批量样本，需除以样本数\(n\)以标准化梯度，即\(\frac{\partial \Loss}{\partial \Wtwo} = \frac{1}{n} \delta^{(2)} \cdot \aone^T\)）
+
+\paragraph{步骤3：计算损失对输出层偏置\(\btwo\)的梯度}
+由\(\ztwo = \aone \cdot \Wtwo + \btwo\)，对\(\btwo\)求偏导（偏置对加权输入的贡献为1）：\(\frac{\partial \ztwo}{\partial \btwo} = \mathbf{I}\)（单位矩阵，实际计算中为对样本维度求和）。  
+因此，损失对\(\btwo\)的梯度为：
+\[
+\frac{\partial \Loss}{\partial \btwo} = \delta^{(2)} \cdot \mathbf{I} = \frac{1}{n} \sum_{i=1}^n \delta^{(2)}_i
+\]
+（\(\delta^{(2)}_i\)为第\(i\)个样本的输出层误差信号）
+
+
+\subsubsection{5.3 隐藏层梯度推导（以\(\Wone\)和\(\bone\)为例）}
+隐藏层梯度需通过“输出层误差信号反向传递”推导，步骤如下：
+
+\paragraph{步骤1：计算隐藏层误差信号\(\delta^{(1)}\)}
+根据链式法则，隐藏层误差信号\(\delta^{(1)} = \frac{\partial \Loss}{\partial \zone}\)可分解为“损失对输出层加权输入的梯度”、“输出层加权输入对隐藏层激活输出的梯度”、“隐藏层激活输出对加权输入的梯度”的乘积：
+\[
+\delta^{(1)} = \frac{\partial \Loss}{\partial \zone} = \frac{\partial \Loss}{\partial \ztwo} \cdot \frac{\partial \ztwo}{\partial \aone} \cdot \frac{\partial \aone}{\partial \zone}
+\]
+- \(\frac{\partial \Loss}{\partial \ztwo} = \delta^{(2)}\)（输出层误差信号，已在前一步计算）；
+- 由\(\ztwo = \aone \cdot \Wtwo + \btwo\)，对\(\aone\)求偏导：\(\frac{\partial \ztwo}{\partial \aone} = \Wtwo^T\)；
+- 隐藏层激活函数为Sigmoid，其对\(\zone\)的导数：\(\frac{\partial \aone}{\partial \zone} = \aone \cdot (1 - \aone)\)（元素级乘法，记为\(\odot\)）。
+
+代入后得到隐藏层误差信号：
+\[
+\delta^{(1)} = \delta^{(2)} \cdot \Wtwo^T \odot \aone \cdot (1 - \aone)
+\]
+
+\paragraph{步骤2：计算损失对隐藏层权重\(\Wone\)的梯度}
+同理，根据链式法则\(\frac{\partial \Loss}{\partial \Wone} = \frac{\partial \Loss}{\partial \zone} \cdot \frac{\partial \zone}{\partial \Wone}\)：
+- \(\frac{\partial \Loss}{\partial \zone} = \delta^{(1)}\)（隐藏层误差信号）；
+- 由\(\zone = \Xinput \cdot \Wone + \bone\)，对\(\Wone\)求偏导：\(\frac{\partial \zone}{\partial \Wone} = \Xinput^T\)。
+
+因此，损失对\(\Wone\)的梯度为：
+\[
+\frac{\partial \Loss}{\partial \Wone} = \delta^{(1)} \cdot \Xinput^T = \frac{1}{n} \delta^{(1)} \cdot \Xinput^T
+\]
+（批量样本需除以\(n\)标准化）
+
+\paragraph{步骤3：计算损失对隐藏层偏置\(\bone\)的梯度}
+与输出层偏置类似，\(\frac{\partial \zone}{\partial \bone} = \mathbf{I}\)，因此：
+\[
+\frac{\partial \Loss}{\partial \bone} = \frac{1}{n} \sum_{i=1}^n \delta^{(1)}_i
+\]
+
+
+\subsection{6. 参数更新：基于梯度下降最小化损失}
+得到损失对权重和偏置的梯度后，采用**梯度下降算法**更新参数——由于梯度指向“损失增大的最快方向”，因此沿梯度反方向更新参数，可逐步减小损失。
+
+参数更新公式通用形式为：
+\[
+\mathbf{W}_{\text{new}} = \mathbf{W}_{\text{old}} - \lr \cdot \frac{\partial \Loss}{\partial \mathbf{W}_{\text{old}}}
+\]
+\[
+\mathbf{b}_{\text{new}} = \mathbf{b}_{\text{old}} - \lr \cdot \frac{\partial \Loss}{\partial \mathbf{b}_{\text{old}}}
+\]
+其中：
+- \(\mathbf{W}_{\text{old}}\)、\(\mathbf{W}_{\text{new}}\)分别为更新前后的权重；
+- \(\mathbf{b}_{\text{old}}\)、\(\mathbf{b}_{\text{new}}\)分别为更新前后的偏置；
+- \(\lr\)为学习率（超参数，控制每步更新幅度，通常取\(10^{-3} \sim 10^{-1}\)）。
+
+具体到各层参数，更新公式为：
+1. 隐藏层权重更新：\(\Wone_{\text{new}} = \Wone_{\text{old}} - \lr \cdot \frac{\partial \Loss}{\partial \Wone}\)
+2. 隐藏层偏置更新：\(\bone_{\text{new}} = \bone_{\text{old}} - \lr \cdot \frac{\partial \Loss}{\partial \bone}\)
+3. 输出层权重更新：\(\Wtwo_{\text{new}} = \Wtwo_{\text{old}} - \lr \cdot \frac{\partial \Loss}{\partial \Wtwo}\)
+4. 输出层偏置更新：\(\btwo_{\text{new}} = \btwo_{\text{old}} - \lr \cdot \frac{\partial \Loss}{\partial \btwo}\)
+
+
+\subsection{7. 反向传播的核心逻辑总结}
+反向传播通过“链式法则+误差信号传递”，高效解决了“多层神经网络参数梯度计算”的问题，其核心逻辑可概括为两点：
+1. **误差反向传递**：某层误差信号\(\delta^{(l)}\)依赖于下一层误差信号\(\delta^{(l+1)}\)，通过权重矩阵转置\(\W^{(l+1)^T}\)传递，即\(\delta^{(l)} \propto \delta^{(l+1)} \cdot \W^{(l+1)^T}\)；
+2. **梯度快速计算**：某层权重梯度仅需“当前层误差信号\(\delta^{(l)}\) + 前一层激活输出\(\a^{(l-1)}\)”，即\(\frac{\partial \Loss}{\partial \W^{(l)}} = \delta^{(l)} \cdot \a^{(l-1)^T}\)。
+
+通过“前向传播→损失计算→反向传播→参数更新”的迭代循环，网络参数逐步优化，损失函数持续减小，最终实现“预测输出逼近真实值”的目标。
+
+\end{document}
